@@ -8,8 +8,7 @@ def update_omega(omega_bar, b_t, w0_bar):
 def update_theta_es(theta_bar_old, dist_shape_list, a_t, omega_bar_t, pi_t, ot_ind, numvals_z, theta_bar_indices, dep_rate,\
                     theta_bar_limits, M, K, gamma_bar=np.array([0.1, 0.1]), unsymmetric=False):
     """
-    Includes a departure rate (prob of departure), and momentum
-    No errors, but correctness not checked (tentative Checked OK)
+    Includes a departure rate (prob of departure)
     """
     pert_vector = np.sin(omega_bar_t)
     theta_bar_pert = theta_bar_old + gamma_bar*pert_vector #elementwise product
@@ -31,7 +30,7 @@ def estimate_theta_es(theta_bar_init, theta_bar_star, theta_bar_dim=2, M = 100, 
                       alpha=0.8, beta=0.7, w0_bar=[1,1/2], gamma_bar=[0.1,0.1], theta_bar_limits=[[0, 1],[0, 0.5]], tau=100, \
                       dep_rate=[0.1, 0.7], A=0.01, B=10):
     '''
-    no errors- OK working (correctness not checked)
+    run the ESML algorithm and return results
     '''
     if theta_bar_dim==2:
         unsymmetric = False
@@ -103,12 +102,15 @@ def estimate_theta_es(theta_bar_init, theta_bar_star, theta_bar_dim=2, M = 100, 
         omega_bar_t=update_omega(omega_bar_t, b_t, w0_bar)
         omega_bar_t_all[:,t]=omega_bar_t
         #theta-update
-        theta_bar_hat_t[:,t] = update_theta_es(theta_bar_hat_t[:,t-1], dist_shape_list, a_t, omega_bar_t, pi_t, ot_ind, \
-                                             numvals_z, theta_bar_indices, dep_rate, theta_bar_limits, M, K, gamma_bar, unsymmetric) 
+        theta_bar_hat_t[:,t] = update_theta_es(theta_bar_hat_t[:,t-1], dist_shape_list, a_t, omega_bar_t_all[:,t-1], \
+                                               pi_t_all[:,t-1], ot_ind, numvals_z, theta_bar_indices, \
+                                               dep_rate, theta_bar_limits, M, K, gamma_bar, unsymmetric) 
         dist_list = update_dist(theta_bar_hat_t[:,t], dist_shape_list, theta_bar_limits, theta_bar_indices, M, unsymmetric)
         #pi-update
-        pi_t = update_pi(pi_t, dist_list, ot_ind, numvals_z, dep_rate=dep_rate)
-        pi_t_all[:,t] = pi_t[:]
+        # pi_t = update_pi(pi_t, dist_list, ot_ind, numvals_z, dep_rate=dep_rate)
+        pi_t_all[:,t] = update_pi_new(pi_t_all[:,t-1], ot_ind, dep_rate, omega_bar_t_all[:,t-1], theta_bar_hat_t[:,t-1], \
+                             gamma_bar, dist_shape_list,theta_bar_limits, theta_bar_indices, M, unsymmetric)
+        # pi_t_all[:,t] = pi_t[:]
         
     results = {'X':X_qlen, 'O':O_obs, 'xi':xi_arr, 'Z':Z_dep, 'pi_t_all':pi_t_all, 'theta_hat_t':theta_bar_hat_t,\
                'omega_t':omega_bar_t_all, 'dist_list':dist_list}

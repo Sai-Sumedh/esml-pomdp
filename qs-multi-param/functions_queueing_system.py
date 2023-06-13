@@ -4,7 +4,7 @@ import math, time
 
 def get_nonzero_indices_state(state_dist_shape, M): #for p(Xn | X_{n-1}, Z_{n-1})
     '''
-    Checked OK 
+    indices in prob. distribution p(X_{n+1} | X_n, Z_n) which depend on theta 
     '''
     theta_indices = np.zeros(state_dist_shape, dtype=bool) #location of 'p' in the transition probability kernel
     theta_not_indices = np.zeros(state_dist_shape, dtype=bool) #location of '1-p' in the transition probability kernel
@@ -20,7 +20,7 @@ def get_nonzero_indices_state(state_dist_shape, M): #for p(Xn | X_{n-1}, Z_{n-1}
 
 def get_nonzero_indices_obs(obs_dist_shape, K, unsymmetric=False): #for p(On | Xn)
     '''
-    Checked OK
+    indices in p(O_k|X_k) which depend on theta(2) and theta(3) (if it exists- when unsymmetric is True)
     '''
     phi_indices = np.zeros(obs_dist_shape, dtype=bool)
     phi_not_indices = np.zeros(obs_dist_shape, dtype=bool)
@@ -50,7 +50,7 @@ def get_nonzero_indices_obs(obs_dist_shape, K, unsymmetric=False): #for p(On | X
 
 def get_full_dist(dist_list):
     '''
-    Checked OK
+    takes a list of two distributions p(X_{n+1}|X_n, Z_n) and p(O_{n+1}|X_{n+1}) and returns p(X_{n+1}, O_{n_1}|X_n, Z_n)
     '''
     state_dist, obs_dist = dist_list[0], dist_list[1]
     numvals_o = obs_dist.shape[0]
@@ -73,7 +73,7 @@ def update_dist(theta_bar_new, dist_shape_list, theta_bar_limits, theta_bar_indi
     to update the transition kernel, just update the saved indices 
     directly instead of looping over XZ values again (most are zeroes)
     
-    Checked OK
+    
     """
     state_dist_new = np.zeros(dist_shape_list[0])
     obs_dist_new = np.zeros(dist_shape_list[1])
@@ -98,9 +98,9 @@ def update_dist(theta_bar_new, dist_shape_list, theta_bar_limits, theta_bar_indi
     return dist_list_new
 
 
-def update_pi(pi_curr, dist_list, o_new_ind, numvals_z, dep_rate):
+def update_pi_fixedparam(pi_curr, dist_list, o_new_ind, numvals_z, dep_rate): #old, without using perturbation in pi
     """
-    OK working (correctness not checked)
+    update the nonlinear filter when the parameter is fixed
     """
     p_theta = get_full_dist(dist_list)
     p_theta_reduced = np.sum(p_theta[:, o_new_ind, :, :]*np.array([1-dep_rate[o_new_ind], \
@@ -109,6 +109,23 @@ def update_pi(pi_curr, dist_list, o_new_ind, numvals_z, dep_rate):
     pi_new = prod_pi_p_red / np.sum(prod_pi_p_red)
     pi_new = np.squeeze(pi_new)
     return pi_new
+
+def update_pi_new(pi_curr, o_new_ind, dep_rate, omega_bar_t, theta_bar_t, gamma_bar, dist_shape_list, \
+             theta_bar_limits, theta_bar_indices, M, unsymmetric): #old, without using perturbation in pi
+    """
+    update the nonlinear filter with perturbation
+    """
+    pert_vector = np.sin(omega_bar_t)
+    theta_bar_pert = theta_bar_t + gamma_bar*pert_vector #elementwise product
+    dist_pert_list = update_dist(theta_bar_pert, dist_shape_list, theta_bar_limits, theta_bar_indices, M, unsymmetric)
+    p_th_pert = get_full_dist(dist_pert_list)
+    p_theta_reduced = np.sum(p_th_pert[:, o_new_ind, :, :]*np.array([1-dep_rate[o_new_ind], \
+                                                                       dep_rate[o_new_ind]]).reshape((1,1,-1)), axis=-1).T
+    prod_pi_p_red = pi_curr.reshape((1,-1)) @ p_theta_reduced
+    pi_new = prod_pi_p_red / np.sum(prod_pi_p_red)
+    pi_new = np.squeeze(pi_new)
+    return pi_new
+
 
 def update_X_O(xk, zk, xikpl1, M, K, theta_bar_star, unsymmetric=False): #stochastic observations now
     xtemp = xk-min(zk,xk) + xikpl1
@@ -170,7 +187,7 @@ def compute_log_likelihood_alldata(theta_bar_estimate, O_t, T, z_vals, o_vals, x
     for t in range(1,T):
         ot_ind = int(np.argwhere(o_vals==O_t[t]))
         LL = compute_ll_next(ll_prev=LL, pi_current=pi_t, dist_list_current=dist_list, dep_rate=dep_rate, o_new_ind=ot_ind)
-        pi_t = update_pi(pi_t, dist_list, ot_ind, numvals_z, dep_rate=dep_rate)
+        pi_t = update_pi_fixedparam(pi_t, dist_list, ot_ind, numvals_z, dep_rate=dep_rate) #when computing the log likelihood, just need normal pi upadte (no perturbation)
         LL_t[t] = LL
     if saveLLt:
         return LL_t
